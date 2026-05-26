@@ -219,7 +219,7 @@ function authTab(mode, label) {
 function loginForm() {
   return `
     <form class="grid" data-form="login">
-      <div class="field"><label>Username or email</label><input name="loginId" required></div>
+      <div class="field"><label>Email</label><input name="loginId" type="email" required></div>
       <div class="field"><label>Password</label><input name="password" type="password" required></div>
       <button class="btn primary" type="submit"><i data-lucide="log-in"></i>Log in</button>
       <p class="muted">The first account created becomes the admin. After that, new accounts are students.</p>
@@ -244,7 +244,7 @@ function registerForm() {
 function resetForm() {
   return `
     <form class="grid" data-form="reset">
-      <div class="field"><label>Username or email</label><input name="loginId" required></div>
+      <div class="field"><label>Email</label><input name="loginId" type="email" required></div>
       <button class="btn primary" type="submit"><i data-lucide="key-round"></i>Send reset email</button>
       <p class="muted">Password resets use Firebase Auth email reset links.</p>
     </form>
@@ -625,24 +625,33 @@ async function register(event) {
   event.preventDefault();
   try {
     const form = new FormData(event.currentTarget);
+    const name = String(form.get("name")).trim();
     const username = String(form.get("username")).trim();
     const usernameLower = username.toLowerCase();
-    const existing = await getDocs(query(collection(state.db, "users"), where("usernameLower", "==", usernameLower)));
-    if (!existing.empty) throw new Error("That username is already taken.");
+    const email = String(form.get("email")).trim();
+    const password = String(form.get("password"));
+
+    const credential = await createUserWithEmailAndPassword(state.auth, email, password);
     const settings = await getDoc(doc(state.db, "settings", "app"));
     const role = settings.exists() ? "student" : "admin";
-    const email = String(form.get("email")).trim();
-    const credential = await createUserWithEmailAndPassword(state.auth, email, String(form.get("password")));
+
     await setDoc(doc(state.db, "users", credential.user.uid), {
-      name: String(form.get("name")).trim(),
+      name,
       username,
       usernameLower,
       email,
       role,
       createdAt: serverTimestamp()
     });
-    if (role === "admin") await setDoc(doc(state.db, "settings", "app"), { adminUid: credential.user.uid, createdAt: serverTimestamp() });
-    state.profile = { id: credential.user.uid, name: String(form.get("name")).trim(), username, usernameLower, email, role };
+
+    if (role === "admin") {
+      await setDoc(doc(state.db, "settings", "app"), {
+        adminUid: credential.user.uid,
+        createdAt: serverTimestamp()
+      });
+    }
+
+    state.profile = { id: credential.user.uid, name, username, usernameLower, email, role };
     state.user = credential.user;
     await refreshData();
     state.view = role === "admin" ? "admin" : "dashboard";
@@ -657,7 +666,7 @@ async function register(event) {
 async function resetPassword(event) {
   event.preventDefault();
   try {
-    const email = await loginEmail(String(new FormData(event.currentTarget).get("loginId")).trim());
+    const email = String(new FormData(event.currentTarget).get("loginId")).trim();
     await sendPasswordResetEmail(state.auth, email);
     state.message = { type: "success", text: "Password reset email sent." };
     render();
