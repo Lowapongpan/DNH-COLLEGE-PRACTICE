@@ -613,7 +613,7 @@ async function login(event) {
   event.preventDefault();
   try {
     const form = new FormData(event.currentTarget);
-    const email = await loginEmail(String(form.get("loginId")).trim());
+    const email = String(form.get("loginId")).trim();
     await signInWithEmailAndPassword(state.auth, email, String(form.get("password")));
   } catch (error) {
     state.message = { type: "error", text: cleanError(error) };
